@@ -3,7 +3,7 @@ from datetime import datetime
 
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.dates import date2num, num2date, AutoDateLocator, DateFormatter
+from matplotlib.dates import date2num, num2date, AutoDateLocator, DateFormatter, DayLocator
 from scipy.interpolate import interp1d
 
 import pandas as pd
@@ -17,7 +17,7 @@ M0 = 0.0
 D0 = 0.0
 K0 = 0.0
 start_date = (2020, 2, 26)
-start = date2num(datetime(*start_date)) - 41.0  # Guesstimating case 0 was 41 days before 26 Feb when we know K = 20, N ~ 40.
+start = date2num(datetime(*start_date)) - 30.0  # Guesstimating case 0 was 41 days before 26 Feb when we know K = 20, N ~ 40.
 
 def alpha_variable(k):
     if k < 1000:
@@ -30,12 +30,12 @@ def alpha_variable(k):
 # end func
 
 # Simulation period (days)
-T = 365.0
+T = 90.0
 end = start + T
 # Time step
 dt = 1.0
 # Growth coefficient
-alpha = lambda k: 0.22
+alpha = lambda k: 0.3
 # alpha = lambda k: 0.22 if k < 1000 else 0.1
 # alpha = alpha_variable
 # Fatality rate as proportion of those who are sick for fixed duration tau
@@ -46,8 +46,8 @@ s = 0.95
 ti = 5.5
 # Confirmation period - from onset of symptoms to diagnosis
 tc = 2.0
-# Resolution period (recovery or death), 17 days after symptoms noticed
-tau = 12.5 + ti
+# Resolution period (recovery or death), # days after symptoms noticed
+tau = 14.0 + ti
 # Herd immunity threshold (proportion of population)
 h = 0.5
 # Proportion of known infected requiring hospitalization
@@ -62,7 +62,10 @@ print('nbeds = {}'.format(nbeds))
 L = int(T/dt)
 P = np.zeros(L); P[0] = P0
 N = np.zeros(L); N[0] = N0
+# New cases per dt
 growthN = np.zeros(L)  # ; growthN[0] = 0.0
+# New known cases
+new_cases = np.zeros(L)
 U = np.zeros(L); U[0] = U0
 M = np.zeros(L); M[0] = M0
 D = np.zeros(L); D[0] = D0
@@ -89,7 +92,8 @@ for i in range(1, L):
     assert np.isclose(P[i] + D[i], P0)
     assert N[i] <= P[i]
     assert M[i] <= P[i]
-    K[i] = s*Nint(_t - ti - tc)
+    K[i] = s*Nint(_t - ti - tc)  # known active cases
+    new_cases[i] = s*growthNint(_t - ti - tc)  # known new infections this time interval
     U[i] = P[i] - N[i] - M[i]
     assert U[i] >= 0.0
     # print("Day: {:.2f}, Cumulative cases: {:.2f}, Recovered cases: {:.2f}, Deaths: {:.2f}, Pop: {:.2f}".format(
@@ -108,53 +112,66 @@ CI = N - K
 CI[(CI < 0)] = np.nan
 # Compute number of hospital beds needed
 beds = phosp*K
+# Compute new known cases per dt
+newC_rate = new_cases/dt
+# Compute total known cases
+totKnown =  np.cumsum(new_cases)
 
-# Load Australia real date
-# data_real = pd.read_csv('total-AU-cases-covid-19-who.csv', dtype={'Country': str, 'Day Of Year': int, 'Total confirmed cases of COVID-19': float})
-# case_col = 'Total confirmed cases'
-# data_real.rename(columns={'Total confirmed cases of COVID-19': case_col}, inplace=True)
-# data_real['Date'] = data_real['Day Of Year'].transform(lambda d: date2num(datetime.strptime('2020 ' + str(d), '%Y %j')))
-
+# Load Australia real data. Source from https://covid.ourworldindata.org/data/total_cases.csv,
+# https://covid.ourworldindata.org/data/total_deaths.csv
 case_col = 'Australia'
-data_real = pd.read_csv('total_world_cases-covid-19-who.csv', usecols=['date', 'Australia'], parse_dates=['date'])
-data_real['Date'] = data_real['date'].transform(lambda d: date2num(d.date()))
+cases_real = pd.read_csv('total_world_cases-covid-19-who.csv', usecols=['date', 'Australia'], parse_dates=['date'])
+cases_real['Date'] = cases_real['date'].transform(lambda d: date2num(d.date()))
+deaths_real = pd.read_csv('total_world_deaths-covid-19-who.csv', usecols=['date', 'Australia'], parse_dates=['date'])
+deaths_real['Date'] = deaths_real['date'].transform(lambda d: date2num(d.date()))
 
 # Plot
 locator = AutoDateLocator()
 formatter = DateFormatter('%d %b %Y')
+day_locator = DayLocator()
 
-all = np.floor(np.vstack((Ncum, N, K, D, M, CI, beds)))
+all = np.floor(np.vstack((Ncum, N, totKnown, K, newC_rate, D, M, CI, beds)))
 plt.figure(figsize=(16,9))
 plt.plot(start + t, all.T, linewidth=2.0, alpha=0.6)
-leg_labels = ['Total infections', 'Actual active cases', 'Known active cases', 'Deaths', 'Recovered', 'Case ignorance', 'Hospital beds needed']
+leg_labels = ['Total actual infections', 'Actual active cases', 'Total known cases', 'Known active cases',
+              'Case discovery rate', 'Total deaths', 'Recovered', 'Case ignorance', 'Hospital beds needed']
 plt.legend(leg_labels)
 plt.grid(linestyle=':', color='#80808080')
 plt.gca().axhline(nbeds, color='#808080', linestyle='--')
 plt.text(start + 10.0, nbeds*1.01, 'Hospital total capacity (beds)', va='bottom')
+today = date2num(datetime.now())
+plt.gca().axvline(today, color='#808080', linestyle='--')
+plt.text(today + 0.25, 10, 'Today', va='bottom')
 # plt.ylim(None, P0)
 plt.gca().xaxis.set_major_locator(locator)
 plt.gca().xaxis.set_major_formatter(formatter)
 plt.gca().tick_params(axis='y', right=True, labelright=True, which='both')
 plt.xlim(start, end)
-plt.xlabel('Date')
-plt.ylabel('Number # (people or beds)')
-plt.title('Modelling exponential COVID-19 viral spread')
+plt.xlabel('Date', fontsize=14)
+plt.ylabel('Number # (people or beds)', fontsize=14)
+plt.title('Modelling exponential COVID-19 viral spread', fontsize=16)
 plt.show()
 
 all[(all <= 0.0)] = np.nan
 plt.figure(figsize=(16,9))
 plt.semilogy(start + t, all.T, linewidth=2.0, alpha=0.6)
-plt.legend(leg_labels)
-plt.semilogy(data_real['Date'], data_real[case_col], 'x', color='C2')
+plt.semilogy(cases_real['Date'], cases_real[case_col], 'x', color='C2', alpha=0.6)
+plt.semilogy(deaths_real['Date'], deaths_real[case_col], 'x', color='C5', alpha=0.6)
+plt.legend(leg_labels + ['AU cases', 'AU deaths'])
 plt.grid(linestyle=':', color='#80808080')
+plt.grid(linestyle=':', color='#a0a0a080', axis='both', which='minor', alpha=0.2)
 plt.gca().axhline(nbeds, color='#808080', linestyle='--')
 plt.text(start + 10.0, nbeds*1.05, 'Hospital total capacity (beds)', va='bottom')
+plt.gca().axvline(today, color='#808080', linestyle='--')
+plt.text(today + 0.25, 10, 'Today', va='bottom')
 # plt.ylim(None, P0)
 plt.gca().xaxis.set_major_locator(locator)
 plt.gca().xaxis.set_major_formatter(formatter)
+plt.gca().xaxis.set_minor_locator(day_locator)
 plt.gca().tick_params(axis='y', right=True, labelright=True, which='both')
+plt.gca().tick_params(axis='x', top=True, which='both')
 plt.xlim(start, end)
-plt.xlabel('Date')
-plt.ylabel('Number # (people or beds, LOG scale)')
-plt.title('Modelling exponential COVID-19 viral spread (LOG scale)')
+plt.xlabel('Date', fontsize=14)
+plt.ylabel('Number # (people or beds, LOG scale)', fontsize=14)
+plt.title('Modelling exponential COVID-19 viral spread (LOG scale)', fontsize=16)
 plt.show()

@@ -30,7 +30,8 @@ def alpha_variable(k):
 # end func
 
 # Simulation period (days)
-T = 90.0
+# T = 90.0
+T = 365.0
 end = start + T
 # Time step
 dt = 1.0
@@ -39,7 +40,8 @@ alpha = lambda k: 0.3
 # alpha = lambda k: 0.22 if k < 1000 else 0.1
 # alpha = alpha_variable
 # Fatality rate as proportion of those who are sick for fixed duration tau
-f = 0.015
+# f = 0.015
+f = 0.03  # elderly
 # Proportion of infected after incubation that become symptomatic
 s = 0.95
 # Incubation period
@@ -131,6 +133,8 @@ formatter = DateFormatter('%d %b %Y')
 day_locator = DayLocator()
 
 all = np.floor(np.vstack((Ncum, N, totKnown, K, newC_rate, D, M, CI, beds)))
+
+# Plot linear scale
 plt.figure(figsize=(16,9))
 plt.plot(start + t, all.T, linewidth=2.0, alpha=0.6)
 leg_labels = ['Total actual infections', 'Actual active cases', 'Total known cases', 'Known active cases',
@@ -152,6 +156,7 @@ plt.ylabel('Number # (people or beds)', fontsize=14)
 plt.title('Modelling exponential COVID-19 viral spread', fontsize=16)
 plt.show()
 
+# Plot log scale
 all[(all <= 0.0)] = np.nan
 plt.figure(figsize=(16,9))
 plt.semilogy(start + t, all.T, linewidth=2.0, alpha=0.6)
@@ -174,4 +179,24 @@ plt.xlim(start, end)
 plt.xlabel('Date', fontsize=14)
 plt.ylabel('Number # (people or beds, LOG scale)', fontsize=14)
 plt.title('Modelling exponential COVID-19 viral spread (LOG scale)', fontsize=16)
+plt.show()
+
+# Plot ratios
+plt.figure(figsize=(16,9))
+plt.semilogy(start + t, np.vstack((N/K, D/Ncum, D/totKnown)).T, linewidth=2.0, alpha=0.6)
+leg_labels = ['Actual active cases/Known active cases', 'Total deaths/Total actual infections', 'Total deaths/Total known cases (mortality)']
+plt.legend(leg_labels)
+plt.grid(linestyle=':', color='#80808080')
+plt.grid(linestyle=':', color='#a0a0a080', axis='both', which='minor', alpha=0.2)
+# today = date2num(datetime.now())
+# plt.gca().axvline(today, color='#808080', linestyle='--')
+# plt.text(today + 0.25, 10, 'Today', va='bottom')
+plt.gca().xaxis.set_major_locator(locator)
+plt.gca().xaxis.set_major_formatter(formatter)
+plt.gca().tick_params(axis='y', right=True, labelright=True, which='both')
+plt.xlim(start, end)
+# plt.ylim(1, 1e4)
+plt.xlabel('Date', fontsize=14)
+plt.ylabel('Ratio', fontsize=14)
+plt.title('Modelling COVID-19: ratio of true cases to knowns + mortality', fontsize=16)
 plt.show()

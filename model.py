@@ -3,8 +3,11 @@ from datetime import datetime
 
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.dates import date2num, num2date, AutoDateLocator, AutoDateFormatter
+from matplotlib.dates import date2num, num2date, AutoDateLocator, DateFormatter
 from scipy.interpolate import interp1d
+
+import pandas as pd
+
 
 # Initial population
 P0 = 25000000.0
@@ -89,8 +92,8 @@ for i in range(1, L):
     K[i] = s*Nint(_t - ti - tc)
     U[i] = P[i] - N[i] - M[i]
     assert U[i] >= 0.0
-    print("Day: {:.2f}, Cumulative cases: {:.2f}, Recovered cases: {:.2f}, Deaths: {:.2f}, Pop: {:.2f}".format(
-        _t, N[i] + M[i] + D[i], M[i], D[i], P[i]))
+    # print("Day: {:.2f}, Cumulative cases: {:.2f}, Recovered cases: {:.2f}, Deaths: {:.2f}, Pop: {:.2f}".format(
+    #     _t, N[i] + M[i] + D[i], M[i], D[i], P[i]))
 # end for
 assert np.isclose(P[-1] + D[-1], P0)
 assert np.isclose(P[-1], U[-1] + N[-1] + M[-1])
@@ -106,8 +109,19 @@ CI[(CI < 0)] = np.nan
 # Compute number of hospital beds needed
 beds = phosp*K
 
+# Load Australia real date
+# data_real = pd.read_csv('total-AU-cases-covid-19-who.csv', dtype={'Country': str, 'Day Of Year': int, 'Total confirmed cases of COVID-19': float})
+# case_col = 'Total confirmed cases'
+# data_real.rename(columns={'Total confirmed cases of COVID-19': case_col}, inplace=True)
+# data_real['Date'] = data_real['Day Of Year'].transform(lambda d: date2num(datetime.strptime('2020 ' + str(d), '%Y %j')))
+
+case_col = 'Australia'
+data_real = pd.read_csv('total_world_cases-covid-19-who.csv', usecols=['date', 'Australia'], parse_dates=['date'])
+data_real['Date'] = data_real['date'].transform(lambda d: date2num(d.date()))
+
+# Plot
 locator = AutoDateLocator()
-formatter = AutoDateFormatter(locator)
+formatter = DateFormatter('%d %b %Y')
 
 all = np.floor(np.vstack((Ncum, N, K, D, M, CI, beds)))
 plt.figure(figsize=(16,9))
@@ -131,6 +145,7 @@ all[(all <= 0.0)] = np.nan
 plt.figure(figsize=(16,9))
 plt.semilogy(start + t, all.T, linewidth=2.0, alpha=0.6)
 plt.legend(leg_labels)
+plt.semilogy(data_real['Date'], data_real[case_col], 'x', color='C2')
 plt.grid(linestyle=':', color='#80808080')
 plt.gca().axhline(nbeds, color='#808080', linestyle='--')
 plt.text(start + 10.0, nbeds*1.05, 'Hospital total capacity (beds)', va='bottom')

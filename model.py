@@ -17,11 +17,11 @@ M0 = 0.0
 D0 = 0.0
 K0 = 0.0
 start_date = (2020, 2, 26)
-start = date2num(datetime(*start_date)) - 30.0  # Guesstimating case 0 was 41 days before 26 Feb when we know K = 20, N ~ 40.
+start = date2num(datetime(*start_date)) - 25.0  # Guesstimating patient 0 was this many days before 26 Feb when we know K = 20, N ~ 40.
 
 def alpha_variable(k):
     if k < 1000:
-        return 0.22
+        return 0.23
     elif k < 10000:
         return 0.16
     else:
@@ -31,7 +31,7 @@ def alpha_variable(k):
 
 # Simulation period (days)
 # T = 90.0
-T = 365.0
+T = 180.0
 end = start + T
 # Time step
 dt = 1.0
@@ -39,17 +39,16 @@ dt = 1.0
 alpha = lambda k: 0.3
 # alpha = lambda k: 0.22 if k < 1000 else 0.1
 # alpha = alpha_variable
-# Fatality rate as proportion of those who are sick for fixed duration tau
-# f = 0.015
-f = 0.03  # elderly
+# Fatality rate as proportion of those who are sick for fixed duration tau. Only applies to the set of symptomatic people.
+f = 0.03
 # Proportion of infected after incubation that become symptomatic
-s = 0.95
-# Incubation period
-ti = 5.5
-# Confirmation period - from onset of symptoms to diagnosis
-tc = 2.0
-# Resolution period (recovery or death), # days after symptoms noticed
-tau = 14.0 + ti
+s = 0.5
+# Incubation period (period until being contagious - the period until people notice symptoms is longer)
+ti = 3.5
+# Confirmation period - from onset of contagion to diagnosis (includes delay from contagiousness to noticing symptoms)
+tc = 3.0
+# Resolution period (recovery or death), # days after becoming contagious
+tau = 10.5 + ti
 # Herd immunity threshold (proportion of population)
 h = 0.5
 # Proportion of known infected requiring hospitalization
@@ -109,7 +108,7 @@ print("Infection rate: {}".format(ir))
 
 # Compute cumulative cases (total number infected out of initial population)
 Ncum = N + M + D
-# Compute number  of cases we don't know
+# Compute number of cases we don't know
 CI = N - K
 CI[(CI < 0)] = np.nan
 # Compute number of hospital beds needed
@@ -136,23 +135,23 @@ all = np.floor(np.vstack((Ncum, N, totKnown, K, newC_rate, D, M, CI, beds)))
 
 # Plot linear scale
 plt.figure(figsize=(16,9))
-plt.plot(start + t, all.T, linewidth=2.0, alpha=0.6)
+plt.plot(start + t, all.T/1.0e6, linewidth=2.0, alpha=0.6)
 leg_labels = ['Total actual infections', 'Actual active cases', 'Total known cases', 'Known active cases',
               'Case discovery rate', 'Total deaths', 'Recovered', 'Case ignorance', 'Hospital beds needed']
 plt.legend(leg_labels)
 plt.grid(linestyle=':', color='#80808080')
-plt.gca().axhline(nbeds, color='#808080', linestyle='--')
-plt.text(start + 10.0, nbeds*1.01, 'Hospital total capacity (beds)', va='bottom')
+plt.gca().axhline(nbeds/1.0e6, color='#808080', linestyle='--')
+plt.text(start + 10.0, nbeds*1.01/1.0e6, 'Hospital total capacity (beds)', va='bottom')
 today = date2num(datetime.now())
 plt.gca().axvline(today, color='#808080', linestyle='--')
-plt.text(today + 0.25, 10, 'Today', va='bottom')
+plt.text(today + 0.25, nbeds*1.01/1.0e6, 'Today', va='bottom')
 # plt.ylim(None, P0)
 plt.gca().xaxis.set_major_locator(locator)
 plt.gca().xaxis.set_major_formatter(formatter)
 plt.gca().tick_params(axis='y', right=True, labelright=True, which='both')
 plt.xlim(start, end)
 plt.xlabel('Date', fontsize=14)
-plt.ylabel('Number # (people or beds)', fontsize=14)
+plt.ylabel('Number # (millions of people or beds)', fontsize=14)
 plt.title('Modelling exponential COVID-19 viral spread', fontsize=16)
 plt.show()
 
@@ -168,7 +167,7 @@ plt.grid(linestyle=':', color='#a0a0a080', axis='both', which='minor', alpha=0.2
 plt.gca().axhline(nbeds, color='#808080', linestyle='--')
 plt.text(start + 10.0, nbeds*1.05, 'Hospital total capacity (beds)', va='bottom')
 plt.gca().axvline(today, color='#808080', linestyle='--')
-plt.text(today + 0.25, 10, 'Today', va='bottom')
+plt.text(today + 0.25, nbeds*1.05, 'Today', va='bottom')
 # plt.ylim(None, P0)
 plt.gca().xaxis.set_major_locator(locator)
 plt.gca().xaxis.set_major_formatter(formatter)
@@ -183,8 +182,9 @@ plt.show()
 
 # Plot ratios
 plt.figure(figsize=(16,9))
-plt.semilogy(start + t, np.vstack((N/K, D/Ncum, D/totKnown)).T, linewidth=2.0, alpha=0.6)
-leg_labels = ['Actual active cases/Known active cases', 'Total deaths/Total actual infections', 'Total deaths/Total known cases (mortality)']
+plt.semilogy(start + t, np.vstack((N/K, D/Ncum, D/totKnown, newC_rate/N)).T, linewidth=2.0, alpha=0.6)
+leg_labels = ['Actual active cases/Known active cases', 'Total deaths/Total actual infections',
+              'Total deaths/Total known cases (mortality)', 'New case rate/Actual active cases']
 plt.legend(leg_labels)
 plt.grid(linestyle=':', color='#80808080')
 plt.grid(linestyle=':', color='#a0a0a080', axis='both', which='minor', alpha=0.2)
@@ -194,6 +194,8 @@ plt.grid(linestyle=':', color='#a0a0a080', axis='both', which='minor', alpha=0.2
 plt.gca().xaxis.set_major_locator(locator)
 plt.gca().xaxis.set_major_formatter(formatter)
 plt.gca().tick_params(axis='y', right=True, labelright=True, which='both')
+plt.gca().axvline(today, color='#808080', linestyle='--')
+plt.text(today + 0.25, 1, 'Today', va='bottom')
 plt.xlim(start, end)
 # plt.ylim(1, 1e4)
 plt.xlabel('Date', fontsize=14)

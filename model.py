@@ -16,8 +16,8 @@ U0 = P0 - N0
 M0 = 0.0
 D0 = 0.0
 K0 = 0.0
-start_date = (2020, 2, 26)
-start = date2num(datetime(*start_date)) - 25.0  # Guesstimating patient 0 was this many days before 26 Feb when we know K = 20, N ~ 40.
+start_date = date2num(datetime(2020, 2, 26))
+start = start_date - 28.5  # Guesstimating patient 0 was this many days before 26 Feb when we know K = 20, N ~ 40.
 
 def alpha_variable(k):
     if k < 1000:
@@ -34,14 +34,14 @@ def alpha_variable(k):
 T = 180.0
 end = start + T
 # Time step
-dt = 1.0
+dt = 0.1
 # Growth coefficient
 alpha = lambda k: 0.3
 # alpha = lambda k: 0.22 if k < 1000 else 0.1
 # alpha = alpha_variable
-# Fatality rate as proportion of those who are sick for fixed duration tau. Only applies to the set of symptomatic people.
+# Fatality rate as proportion of total actual cases who are infected for fixed duration tau.
 f = 0.03
-# Proportion of infected after incubation that become symptomatic
+# Proportion of infected after incubation that become symptomatic (fraction that becomes 'known')
 s = 0.5
 # Incubation period (period until being contagious - the period until people notice symptoms is longer)
 ti = 3.5
@@ -93,8 +93,9 @@ for i in range(1, L):
     assert np.isclose(P[i] + D[i], P0)
     assert N[i] <= P[i]
     assert M[i] <= P[i]
-    K[i] = s*Nint(_t - ti - tc)  # known active cases
     new_cases[i] = s*growthNint(_t - ti - tc)  # known new infections this time interval
+    K[i] = K[i-1] + new_cases[i] - s*resolved
+    assert K[i] >= 0.0
     U[i] = P[i] - N[i] - M[i]
     assert U[i] >= 0.0
     # print("Day: {:.2f}, Cumulative cases: {:.2f}, Recovered cases: {:.2f}, Deaths: {:.2f}, Pop: {:.2f}".format(
@@ -153,6 +154,7 @@ plt.xlim(start, end)
 plt.xlabel('Date', fontsize=14)
 plt.ylabel('Number # (millions of people or beds)', fontsize=14)
 plt.title('Modelling exponential COVID-19 viral spread', fontsize=16)
+plt.savefig('Linear_scale_covid_growth_Australia_forecast_' + datetime.now().strftime('%Y%m%d') + '.png', dpi=300)
 plt.show()
 
 # Plot log scale
@@ -178,6 +180,7 @@ plt.xlim(start, end)
 plt.xlabel('Date', fontsize=14)
 plt.ylabel('Number # (people or beds, LOG scale)', fontsize=14)
 plt.title('Modelling exponential COVID-19 viral spread (LOG scale)', fontsize=16)
+plt.savefig('Log_scale_covid_growth_Australia_forecast_' + datetime.now().strftime('%Y%m%d') + '.png', dpi=300)
 plt.show()
 
 # Plot ratios
@@ -196,9 +199,10 @@ plt.gca().xaxis.set_major_formatter(formatter)
 plt.gca().tick_params(axis='y', right=True, labelright=True, which='both')
 plt.gca().axvline(today, color='#808080', linestyle='--')
 plt.text(today + 0.25, 1, 'Today', va='bottom')
-plt.xlim(start, end)
+plt.xlim(start_date, end)
 # plt.ylim(1, 1e4)
 plt.xlabel('Date', fontsize=14)
 plt.ylabel('Ratio', fontsize=14)
 plt.title('Modelling COVID-19: ratio of true cases to knowns + mortality', fontsize=16)
+plt.savefig('Reckoning_ratios_Australia_forecast_' + datetime.now().strftime('%Y%m%d') + '.png', dpi=300)
 plt.show()

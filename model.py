@@ -30,13 +30,14 @@ def alpha_variable(k):
 # end func
 
 # Simulation period (days)
-# T = 90.0
 T = 180.0
+# T = 365.0
 end = start + T
 # Time step
 dt = 0.1
 # Growth coefficient
 alpha = lambda k: 0.3
+# alpha = lambda k: 0.12  # Rate to stay within hospital capacity
 # alpha = lambda k: 0.22 if k < 1000 else 0.1
 # alpha = alpha_variable
 # Fatality rate as proportion of total actual cases who are infected for fixed duration tau.
@@ -151,10 +152,16 @@ plt.gca().xaxis.set_major_locator(locator)
 plt.gca().xaxis.set_major_formatter(formatter)
 plt.gca().tick_params(axis='y', right=True, labelright=True, which='both')
 plt.xlim(start, end)
+plt.ylim(0, None)
 plt.xlabel('Date', fontsize=14)
 plt.ylabel('Number # (millions of people or beds)', fontsize=14)
 plt.title('Modelling exponential COVID-19 viral spread', fontsize=16)
-plt.savefig('Linear_scale_covid_growth_Australia_forecast_' + datetime.now().strftime('%Y%m%d') + '.png', dpi=300)
+# Add plot of population still available to function
+ax2 = plt.twinx()
+ax2.plot(start + t, 1.0 - s*N/P, '-.', linewidth=1, alpha=0.8)
+ax2.set_ylim(0, None)
+ax2.set_ylabel('Capacitant population fraction (dash-dot line)', fontsize=14)
+# plt.savefig('Linear_scale_covid_growth_Australia_forecast_' + datetime.now().strftime('%Y%m%d') + '.png', dpi=300)
 plt.show()
 
 # Plot log scale
@@ -180,7 +187,7 @@ plt.xlim(start, end)
 plt.xlabel('Date', fontsize=14)
 plt.ylabel('Number # (people or beds, LOG scale)', fontsize=14)
 plt.title('Modelling exponential COVID-19 viral spread (LOG scale)', fontsize=16)
-plt.savefig('Log_scale_covid_growth_Australia_forecast_' + datetime.now().strftime('%Y%m%d') + '.png', dpi=300)
+# plt.savefig('Log_scale_covid_growth_Australia_forecast_' + datetime.now().strftime('%Y%m%d') + '.png', dpi=300)
 plt.show()
 
 # Plot ratios
@@ -204,5 +211,5 @@ plt.xlim(start_date, end)
 plt.xlabel('Date', fontsize=14)
 plt.ylabel('Ratio', fontsize=14)
 plt.title('Modelling COVID-19: ratio of true cases to knowns + mortality', fontsize=16)
-plt.savefig('Reckoning_ratios_Australia_forecast_' + datetime.now().strftime('%Y%m%d') + '.png', dpi=300)
+# plt.savefig('Reckoning_ratios_Australia_forecast_' + datetime.now().strftime('%Y%m%d') + '.png', dpi=300)
 plt.show()

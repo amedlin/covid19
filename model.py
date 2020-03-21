@@ -177,7 +177,7 @@ plt.semilogy(cases_real['Date'], cases_real[case_col], 'x', color='C2', alpha=0.
 plt.semilogy(deaths_real['Date'], deaths_real[case_col], 'x', color='C5', alpha=0.6)
 plt.legend(leg_labels + ['AU cases', 'AU deaths'])
 plt.grid(linestyle=':', color='#80808080')
-plt.grid(linestyle=':', color='#a0a0a080', axis='both', which='minor', alpha=0.2)
+plt.grid(linestyle=':', color='#90909080', axis='both', which='minor', alpha=0.2)
 plt.gca().axhline(nbeds, color='#808080', linestyle='--')
 plt.text(start + 10.0, nbeds*1.05, 'Hospital total capacity (beds)', va='bottom')
 plt.gca().axhline(n_icu_beds, color='#808080', linestyle='--')
@@ -204,7 +204,7 @@ leg_labels = ['Actual active cases/Known active cases', 'Total actual infections
               'Total deaths/Total known cases (mortality)', 'Actual active cases/New case rate']
 plt.legend(leg_labels)
 plt.grid(linestyle=':', color='#80808080')
-plt.grid(linestyle=':', color='#a0a0a080', axis='both', which='minor', alpha=0.2)
+plt.grid(linestyle=':', color='#90909080', axis='both', which='minor', alpha=0.2)
 # today = date2num(datetime.now())
 # plt.gca().axvline(today, color='#808080', linestyle='--')
 # plt.text(today + 0.25, 10, 'Today', va='bottom')

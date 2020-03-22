@@ -8,6 +8,8 @@ from scipy.interpolate import interp1d
 
 import pandas as pd
 
+# See also:
+# https://medium.com/@megan.higgie/without-serious-action-australia-will-run-out-of-intensive-care-beds-between-7-and-10-april-59f83b52756e
 
 # Initial population
 P0 = 25000000.0
@@ -48,8 +50,8 @@ s = 0.5
 ti = 3.5
 # Confirmation period - from onset of contagion to diagnosis (includes delay from contagiousness to noticing symptoms)
 tc = 3.0
-# Resolution period (recovery or death), # days after becoming contagious
-tau = 10.5 + ti
+# Resolution period (recovery or death), relative to time of infection. Written here as incubation period plus some days of sickness.
+tau = ti + 10.5
 # Herd immunity threshold (proportion of population)
 h = 0.5
 # Proportion of known infected requiring hospitalization
@@ -64,11 +66,11 @@ n_icu_beds = icu_beds_per_hundredthousand_AUST*(P0/100000.0)
 
 
 # Initialization
-L = int(T/dt)
+L = int(T/dt)  # Total number of samples in time series.
 P = np.zeros(L); P[0] = P0
 N = np.zeros(L); N[0] = N0
-# New cases per dt
-growthN = np.zeros(L)  # ; growthN[0] = 0.0
+# Growth rate, new cases per dt
+G = np.zeros(L)  # ; growthN[0] = 0.0
 # New known cases
 new_cases = np.zeros(L)
 U = np.zeros(L); U[0] = U0
@@ -84,11 +86,11 @@ Nint = interp1d(t, N, copy=False, bounds_error=False, fill_value=N0)
 for i in range(1, L):
     _t = t[i]
     # N[i] = max(N[i-1] + ((alpha*(P[i-1] - M[i-1])/P[i-1])*Nint(_t - ti) - Nint(_t - tau))*dt, 0.0)
-    growthN[i] = alpha(K[i-1])*(h*P[i-1] - N[i-1] - M[i-1])/(h*P[i-1])*Nint(_t - ti)*dt
-    assert growthN[i] >= 0.0
-    growthNint = interp1d(t, growthN, copy=False, bounds_error=False, fill_value=0.0)
-    resolved = growthNint(_t - tau)
-    N[i] = max(N[i-1] + growthN[i] - resolved, 0.0)
+    G[i] = alpha(K[i-1])*(h*P[i-1] - N[i-1] - M[i-1])/(h*P[i-1])*Nint(_t - ti)*dt
+    assert G[i] >= 0.0
+    Gint = interp1d(t, G, copy=False, bounds_error=False, fill_value=0.0)
+    resolved = Gint(_t - tau)
+    N[i] = max(N[i-1] + G[i] - resolved, 0.0)
     Nint = interp1d(t, N, copy=False, bounds_error=False, fill_value=0.0)
     dD = f*resolved
     D[i] = D[i-1] + dD
@@ -97,7 +99,7 @@ for i in range(1, L):
     assert np.isclose(P[i] + D[i], P0)
     assert N[i] <= P[i]
     assert M[i] <= P[i]
-    new_cases[i] = s*growthNint(_t - ti - tc)  # known new infections this time interval
+    new_cases[i] = s*Gint(_t - ti - tc)  # known new infections this time interval
     K[i] = K[i-1] + new_cases[i] - s*resolved
     assert K[i] >= 0.0
     U[i] = P[i] - N[i] - M[i]
@@ -106,7 +108,7 @@ for i in range(1, L):
     #     _t, N[i] + M[i] + D[i], M[i], D[i], P[i]))
 # end for
 assert np.isclose(P[-1] + D[-1], P0)
-assert np.isclose(P[-1], U[-1] + N[-1] + M[-1])
+assert np.isclose(U[-1] + N[-1] + M[-1] + D[-1], P0)
 
 ir = (N[-1] + M[-1] + D[-1])/P0
 print("Infection rate: {}".format(ir))

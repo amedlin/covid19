@@ -1,5 +1,5 @@
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -18,30 +18,40 @@ U0 = P0 - N0
 M0 = 0.0
 D0 = 0.0
 K0 = 0.0
-start_date = date2num(datetime(2020, 2, 26))
-start = start_date - 28.5  # Guesstimating patient 0 was this many days before 26 Feb when we know K = 20, N ~ 40.
 
-def alpha_variable(k):
-    if k < 1000:
-        return 0.23
-    elif k < 10000:
-        return 0.16
+# Based on https://ourworldindata.org/grapher/total-cases-covid-19?time=4..62&country=AUS, since as of 24 March
+# this is the only source I trust which is being maintained and has downloadable data.
+ourworldindata_day_0 = datetime(2020, 1, 21)
+case0_known_date = date2num(datetime(2020, 1, 25))
+start = case0_known_date - 20.0  # Guesstimating patient 0 was infected this many days before 25 Jan when we know K = 1.
+
+# Time dependent growth rate fitted to data
+def alpha_timedep(_t):
+    if _t < 21:
+        return 0.3
+    elif _t < 49:
+        # Early phase before community spread and travellers from countries where spread is out of control
+        return 0.034
+    elif _t < 49 + 20:
+        # Community spread + travellers returning from overseas.
+        # Travellers hypothesized to account for accelerated growth in cases during this period.
+        return 0.35
     else:
-        return 0.1
+        # Effects of social distancing should be kicking in. Value here is a total guess, will need some data
+        # to tune to in a week or so.
+        return 0.15
     # end if
 # end func
 
 # Simulation period (days)
-T = 180.0
+T = 240.0
 # T = 365.0
 end = start + T
 # Time step
 dt = 0.1
 # Growth coefficient
-alpha = lambda k: 0.3
-# alpha = lambda k: 0.12  # Rate to stay within hospital capacity
-# alpha = lambda k: 0.22 if k < 1000 else 0.1
-# alpha = alpha_variable
+# alpha = lambda k: 0.3
+alpha = alpha_timedep
 # Fatality rate as proportion of total actual cases who are infected for fixed duration tau.
 f = 0.03
 # Proportion of infected after incubation that become symptomatic (fraction that becomes 'known')
@@ -51,11 +61,11 @@ ti = 3.5
 # Confirmation period - from onset of contagion to diagnosis (includes delay from contagiousness to noticing symptoms)
 tc = 3.0
 # Resolution period (recovery or death), relative to time of infection. Written here as incubation period plus some days of sickness.
-tau = ti + 10.5
+tau = ti + 21.0
 # Herd immunity threshold (proportion of population)
 h = 0.5
 # Proportion of known infected requiring hospitalization
-phosp = 0.2
+phosp = 0.1
 # Number of hospital beds per 1000 people (https://en.wikipedia.org/wiki/List_of_OECD_countries_by_hospital_beds)
 beds_per_thousand_AUST = 3.84
 # Available beds in the system
@@ -86,7 +96,7 @@ Nint = interp1d(t, N, copy=False, bounds_error=False, fill_value=N0)
 for i in range(1, L):
     _t = t[i]
     # N[i] = max(N[i-1] + ((alpha*(P[i-1] - M[i-1])/P[i-1])*Nint(_t - ti) - Nint(_t - tau))*dt, 0.0)
-    G[i] = alpha(K[i-1])*(h*P[i-1] - N[i-1] - M[i-1])/(h*P[i-1])*Nint(_t - ti)*dt
+    G[i] = alpha(_t)*(h*P[i-1] - N[i-1] - M[i-1])/(h*P[i-1])*Nint(_t - ti)*dt
     assert G[i] >= 0.0
     Gint = interp1d(t, G, copy=False, bounds_error=False, fill_value=0.0)
     resolved = Gint(_t - tau)
@@ -111,7 +121,7 @@ assert np.isclose(P[-1] + D[-1], P0)
 assert np.isclose(U[-1] + N[-1] + M[-1] + D[-1], P0)
 
 ir = (N[-1] + M[-1] + D[-1])/P0
-print("Infection rate: {}".format(ir))
+print("Infection rate: {:.3f}".format(ir))
 
 # Compute cumulative cases (total number infected out of initial population)
 Ncum = N + M + D
@@ -127,11 +137,21 @@ totKnown =  np.cumsum(new_cases)
 
 # Load Australia real data. Source from https://covid.ourworldindata.org/data/total_cases.csv,
 # https://covid.ourworldindata.org/data/total_deaths.csv
-case_col = 'Australia'
-cases_real = pd.read_csv('total_world_cases-covid-19-who.csv', usecols=['date', 'Australia'], parse_dates=['date'])
-cases_real['Date'] = cases_real['date'].transform(lambda d: date2num(d.date()))
-deaths_real = pd.read_csv('total_world_deaths-covid-19-who.csv', usecols=['date', 'Australia'], parse_dates=['date'])
-deaths_real['Date'] = deaths_real['date'].transform(lambda d: date2num(d.date()))
+# case_col = 'Australia'
+# cases_real = pd.read_csv('total_world_cases-covid-19-who.csv', usecols=['date', 'Australia'], parse_dates=['date'])
+# cases_real['Date'] = cases_real['date'].transform(lambda d: date2num(d.date()))
+# deaths_real = pd.read_csv('total_world_deaths-covid-19-who.csv', usecols=['date', 'Australia'], parse_dates=['date'])
+# deaths_real['Date'] = deaths_real['date'].transform(lambda d: date2num(d.date()))
+country = 'Australia'
+case_col = 'Total Known'
+cases_real = pd.read_csv('total-cases-covid-19.csv')
+cases_real = cases_real[(cases_real['Entity'] == country)]
+cases_real.rename(columns={'Total confirmed cases of COVID-19 (cases)': case_col}, inplace=True)
+cases_real['Date'] = cases_real['Year'].transform(lambda d: date2num((ourworldindata_day_0 + timedelta(days=d)).date()))
+deaths_real = pd.read_csv('total-deaths-covid-19.csv')
+deaths_real = deaths_real[(deaths_real['Entity'] == country)]
+deaths_real.rename(columns={'Total confirmed deaths due to COVID-19 (deaths)': case_col}, inplace=True)
+deaths_real['Date'] = deaths_real['Year'].transform(lambda d: date2num((ourworldindata_day_0 + timedelta(days=d)).date()))
 
 # Plot
 locator = AutoDateLocator()
@@ -215,7 +235,7 @@ plt.gca().xaxis.set_major_formatter(formatter)
 plt.gca().tick_params(axis='y', right=True, labelright=True, which='both')
 plt.gca().axvline(today, color='#808080', linestyle='--')
 plt.text(today + 0.25, 1, 'Today ' + today_str, va='bottom')
-plt.xlim(start_date, end)
+plt.xlim(case0_known_date, end)
 # plt.ylim(1, 1e4)
 plt.xlabel('Date', fontsize=14)
 plt.ylabel('Ratio', fontsize=14)

@@ -21,30 +21,34 @@ K0 = 0.0
 
 # Based on https://ourworldindata.org/grapher/total-cases-covid-19?time=4..62&country=AUS, since as of 24 March
 # this is the only source I trust which is being maintained and has downloadable data.
-ourworldindata_day_0 = datetime(2020, 1, 21)
 case0_known_date = date2num(datetime(2020, 1, 25))
-start = case0_known_date - 20.0  # Guesstimating patient 0 was infected this many days before 25 Jan when we know K = 1.
+start = case0_known_date - 22.0  # Guesstimating patient 0 was infected this many days before 25 Jan when we know K = 1.
 
-# Time dependent growth rate fitted to data
+# Material dates
+# China travel ban: https://www.theguardian.com/world/2020/feb/20/australia-extends-coronavirus-ban-on-travel-from-china-into-fourth-week
+china_travel_ban = date2num(datetime(2020, 2, 1))
+# Europe approximate day 0 (based on ourworldindata.org data for Italy and Spain)
+europe_day0 = date2num(datetime(2020, 1, 31))
+# Travellers to AU must self-isolate: https://www.abc.net.au/news/2020-03-15/coronavirus-update-latest-news-us-travel-ban-extended-trump-test/12057094#scomo
+au_international_traveler_self_isolation = date2num(datetime(2020, 3, 15))
+# Total travel ban for non-citizens/non-PRs: https://www.theguardian.com/world/live/2020/mar/20/australia-coronavirus-live-updates-nsw-victoria-qld-tasmania-closed-borders-travel-ban-cases-tally-schools-stimulus-qantas-latest-update-news
+au_total_travel_ban = date2num(datetime(2020, 3, 20))
+# AU nationwide lockdown
+au_nationwide_lockdown = date2num(datetime(2020, 3, 22))
+
+# Time dependent growth rate, approximately inferred from data
 def alpha_timedep(_t):
-    if _t < 21:
-        return 0.3
-    elif _t < 49:
-        # Early phase before community spread and travellers from countries where spread is out of control
-        return 0.034
-    elif _t < 49 + 20:
-        # Community spread + travellers returning from overseas.
-        # Travellers hypothesized to account for accelerated growth in cases during this period.
-        return 0.35
+    if _t < au_nationwide_lockdown - start:
+        return 0.26
     else:
         # Effects of social distancing should be kicking in. Value here is a total guess, will need some data
         # to tune to in a week or so.
-        return 0.15
+        return 0.09
     # end if
 # end func
 
 # Simulation period (days)
-T = 240.0
+T = 304.0
 # T = 365.0
 end = start + T
 # Time step
@@ -53,7 +57,7 @@ dt = 0.1
 # alpha = lambda k: 0.3
 alpha = alpha_timedep
 # Fatality rate as proportion of total actual cases who are infected for fixed duration tau.
-f = 0.03
+f = 0.006
 # Proportion of infected after incubation that become symptomatic (fraction that becomes 'known')
 s = 0.5
 # Incubation period (period until being contagious - the period until people notice symptoms is longer)
@@ -61,11 +65,11 @@ ti = 3.5
 # Confirmation period - from onset of contagion to diagnosis (includes delay from contagiousness to noticing symptoms)
 tc = 3.0
 # Resolution period (recovery or death), relative to time of infection. Written here as incubation period plus some days of sickness.
-tau = ti + 21.0
+tau = ti + 17.5
 # Herd immunity threshold (proportion of population)
-h = 0.5
+h = 0.6
 # Proportion of known infected requiring hospitalization
-phosp = 0.1
+phosp = 0.15
 # Number of hospital beds per 1000 people (https://en.wikipedia.org/wiki/List_of_OECD_countries_by_hospital_beds)
 beds_per_thousand_AUST = 3.84
 # Available beds in the system
@@ -91,37 +95,56 @@ t = np.arange(L)*dt
 
 # Make interpolators for querying time series at past times
 Nint = interp1d(t, N, copy=False, bounds_error=False, fill_value=N0)
+Gint = interp1d(t, G, copy=False, bounds_error=False, fill_value=0.0)
 
 # Updates
 for i in range(1, L):
     _t = t[i]
-    # N[i] = max(N[i-1] + ((alpha*(P[i-1] - M[i-1])/P[i-1])*Nint(_t - ti) - Nint(_t - tau))*dt, 0.0)
-    G[i] = alpha(_t)*(h*P[i-1] - N[i-1] - M[i-1])/(h*P[i-1])*Nint(_t - ti)*dt
+
+    # Update known cases
+    new_cases[i] = s*Gint(_t - ti - tc)  # known new infections this time interval
+    resolved = Gint(_t - tau)
+    K[i] = K[i-1] + new_cases[i] - s*resolved
+
+    # Update growth rate
+    G[i] = alpha(_t)*(h*P[i-1] - N[i-1] - M[i-1])/(h*P[i-1])*(Nint(_t - ti) - K[i])*dt
     assert G[i] >= 0.0
     Gint = interp1d(t, G, copy=False, bounds_error=False, fill_value=0.0)
-    resolved = Gint(_t - tau)
+
+    # Update true actual infected
     N[i] = max(N[i-1] + G[i] - resolved, 0.0)
     Nint = interp1d(t, N, copy=False, bounds_error=False, fill_value=0.0)
+
+    # Update fatalities
     dD = f*resolved
     D[i] = D[i-1] + dD
+
+    # Update recovered
     M[i] = M[i-1] + (1 - f)*resolved
+
+    # Update population
     P[i] = P[i-1] - dD
+
+    # Check invariants
     assert np.isclose(P[i] + D[i], P0)
     assert N[i] <= P[i]
     assert M[i] <= P[i]
-    new_cases[i] = s*Gint(_t - ti - tc)  # known new infections this time interval
-    K[i] = K[i-1] + new_cases[i] - s*resolved
     assert K[i] >= 0.0
+
+    # Compute number of uninfected
     U[i] = P[i] - N[i] - M[i]
     assert U[i] >= 0.0
+
     # print("Day: {:.2f}, Cumulative cases: {:.2f}, Recovered cases: {:.2f}, Deaths: {:.2f}, Pop: {:.2f}".format(
     #     _t, N[i] + M[i] + D[i], M[i], D[i], P[i]))
 # end for
+
+# Check invariants
 assert np.isclose(P[-1] + D[-1], P0)
 assert np.isclose(U[-1] + N[-1] + M[-1] + D[-1], P0)
 
 ir = (N[-1] + M[-1] + D[-1])/P0
-print("Infection rate: {:.3f}".format(ir))
+print("Final infection rate (proportion of population): {:.3f}".format(ir))
 
 # Compute cumulative cases (total number infected out of initial population)
 Ncum = N + M + D
@@ -144,14 +167,13 @@ totKnown =  np.cumsum(new_cases)
 # deaths_real['Date'] = deaths_real['date'].transform(lambda d: date2num(d.date()))
 country = 'Australia'
 case_col = 'Total Known'
-cases_real = pd.read_csv('total-cases-covid-19.csv')
+cases_real = pd.read_csv('total-cases-covid-19.csv', parse_dates=[2])
 cases_real = cases_real[(cases_real['Entity'] == country)]
 cases_real.rename(columns={'Total confirmed cases of COVID-19 (cases)': case_col}, inplace=True)
-cases_real['Date'] = cases_real['Year'].transform(lambda d: date2num((ourworldindata_day_0 + timedelta(days=d)).date()))
-deaths_real = pd.read_csv('total-deaths-covid-19.csv')
+cases_real['New cases'] = cases_real[case_col].diff()
+deaths_real = pd.read_csv('total-deaths-covid-19.csv', parse_dates=[2])
 deaths_real = deaths_real[(deaths_real['Entity'] == country)]
 deaths_real.rename(columns={'Total confirmed deaths due to COVID-19 (deaths)': case_col}, inplace=True)
-deaths_real['Date'] = deaths_real['Year'].transform(lambda d: date2num((ourworldindata_day_0 + timedelta(days=d)).date()))
 
 # Plot
 locator = AutoDateLocator()
@@ -188,7 +210,7 @@ ax2 = plt.twinx()
 ax2.plot(start + t, 1.0 - s*N/P, '-.', linewidth=1, alpha=0.8)
 ax2.set_ylim(0, None)
 ax2.set_ylabel('Capacitant population fraction (dash-dot line)', fontsize=14)
-# plt.savefig('Linear_scale_covid_growth_Australia_forecast_' + now.strftime('%Y%m%d') + '.png', dpi=300)
+plt.savefig('Linear_scale_covid_growth_Australia_forecast_' + now.strftime('%Y%m%d') + '.png', dpi=300)
 plt.show()
 
 # Plot log scale
@@ -196,8 +218,9 @@ all[(all <= 0.0)] = np.nan
 plt.figure(figsize=(16,9))
 plt.semilogy(start + t, all.T, linewidth=2.0, alpha=0.6)
 plt.semilogy(cases_real['Date'], cases_real[case_col], 'x', color='C2', alpha=0.6)
+plt.semilogy(cases_real['Date'], cases_real['New cases'], 'x', color='C4', alpha=0.6)
 plt.semilogy(deaths_real['Date'], deaths_real[case_col], 'x', color='C5', alpha=0.6)
-plt.legend(leg_labels + ['AU cases', 'AU deaths'])
+plt.legend(leg_labels + ['AU total cases', 'AU new cases', 'AU total deaths'])
 plt.grid(linestyle=':', color='#80808080')
 plt.grid(linestyle=':', color='#90909080', axis='both', which='minor', alpha=0.2)
 plt.gca().axhline(nbeds, color='#808080', linestyle='--')
@@ -206,17 +229,30 @@ plt.gca().axhline(n_icu_beds, color='#808080', linestyle='--')
 plt.text(start + 10.0, n_icu_beds*1.05, 'AU Hospital ICU capacity (beds)', va='bottom')
 plt.gca().axvline(today, color='#808080', linestyle='--')
 plt.text(today + 0.25, nbeds*1.05, 'Today ' + today_str, va='bottom')
-# plt.ylim(None, P0)
+# Add other material dates
+plt.gca().axvline(china_travel_ban, color='#a0a0a0', alpha=0.4, linestyle='--')
+plt.text(china_travel_ban + 1, 0.7*P0, 'China travel ban', va='top', alpha=0.5, rotation=90, fontsize=8)
+plt.text(europe_day0, 0.8, 'Approx. Europe Day 0', va='top', alpha=0.5, fontsize=8)
+plt.gca().axvline(au_international_traveler_self_isolation, color='#a0a0a0', alpha=0.4, linestyle='--')
+plt.text(au_international_traveler_self_isolation + 1, 0.7*P0, 'Traveler self-isolation', va='top',
+         alpha=0.5, rotation=90, fontsize=8)
+plt.gca().axvline(au_total_travel_ban, color='#a0a0a0', alpha=0.4, linestyle='--')
+plt.text(au_total_travel_ban + 1, 0.7*P0, 'Total travel ban to AU', va='top',
+         alpha=0.5, rotation=90, fontsize=8)
+plt.gca().axvline(au_nationwide_lockdown, color='#a0a0a0', alpha=0.4, linestyle='--')
+plt.text(au_nationwide_lockdown + 1, 0.7*P0, 'AU nationwide lockdown', va='top',
+         alpha=0.5, rotation=90, fontsize=8)
 plt.gca().xaxis.set_major_locator(locator)
 plt.gca().xaxis.set_major_formatter(formatter)
 plt.gca().xaxis.set_minor_locator(day_locator)
 plt.gca().tick_params(axis='y', right=True, labelright=True, which='both')
 plt.gca().tick_params(axis='x', top=True, which='both')
 plt.xlim(start, end)
+plt.ylim(None, P0)
 plt.xlabel('Date', fontsize=14)
 plt.ylabel('Number # (people or beds, LOG scale)', fontsize=14)
 plt.title('Modelling COVID-19 epidemic lifecycle (LOG scale)', fontsize=16)
-# plt.savefig('Log_scale_covid_growth_Australia_forecast_' + now.strftime('%Y%m%d') + '.png', dpi=300)
+plt.savefig('Log_scale_covid_growth_Australia_forecast_' + now.strftime('%Y%m%d') + '.png', dpi=300)
 plt.show()
 
 # Plot ratios
@@ -235,10 +271,10 @@ plt.gca().xaxis.set_major_formatter(formatter)
 plt.gca().tick_params(axis='y', right=True, labelright=True, which='both')
 plt.gca().axvline(today, color='#808080', linestyle='--')
 plt.text(today + 0.25, 1, 'Today ' + today_str, va='bottom')
-plt.xlim(case0_known_date, end)
-# plt.ylim(1, 1e4)
+plt.xlim(case0_known_date + 30, end)
+plt.ylim(1e-3, 1e4)
 plt.xlabel('Date', fontsize=14)
 plt.ylabel('Ratio', fontsize=14)
 plt.title('Modelling COVID-19: Reckoning ratios', fontsize=16)
-# plt.savefig('Reckoning_ratios_Australia_forecast_' + now.strftime('%Y%m%d') + '.png', dpi=300)
+plt.savefig('Reckoning_ratios_Australia_forecast_' + now.strftime('%Y%m%d') + '.png', dpi=300)
 plt.show()

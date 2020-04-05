@@ -47,6 +47,18 @@ def alpha_timedep(_t):
     # end if
 # end func
 
+# Time dependent growth rate, with post-lockdown value tuned to equilibrate infection rate
+# with recovery rate.
+def alpha_equilibrium(_t):
+    if _t < au_nationwide_lockdown - start:
+        return 0.26
+    else:
+        # Effects of social distancing should be kicking in. Value here is a total guess, will need some data
+        # to tune to in a week or so.
+        return 0.073
+    # end if
+# end func
+
 # Simulation period (days)
 T = 304.0
 # T = 365.0
@@ -210,7 +222,7 @@ ax2 = plt.twinx()
 ax2.plot(start + t, 1.0 - s*N/P, '-.', linewidth=1, alpha=0.8)
 ax2.set_ylim(0, None)
 ax2.set_ylabel('Capacitant population fraction (dash-dot line)', fontsize=14)
-plt.savefig('Linear_scale_covid_growth_Australia_forecast_' + now.strftime('%Y%m%d') + '.png', dpi=300)
+# plt.savefig('Linear_scale_covid_growth_Australia_forecast_' + now.strftime('%Y%m%d') + '.png', dpi=300)
 plt.show()
 
 # Plot log scale
@@ -252,7 +264,7 @@ plt.ylim(None, P0)
 plt.xlabel('Date', fontsize=14)
 plt.ylabel('Number # (people or beds, LOG scale)', fontsize=14)
 plt.title('Modelling COVID-19 epidemic lifecycle (LOG scale)', fontsize=16)
-plt.savefig('Log_scale_covid_growth_Australia_forecast_' + now.strftime('%Y%m%d') + '.png', dpi=300)
+# plt.savefig('Log_scale_covid_growth_Australia_forecast_' + now.strftime('%Y%m%d') + '.png', dpi=300)
 plt.show()
 
 # Plot ratios
@@ -276,5 +288,5 @@ plt.ylim(1e-3, 1e4)
 plt.xlabel('Date', fontsize=14)
 plt.ylabel('Ratio', fontsize=14)
 plt.title('Modelling COVID-19: Reckoning ratios', fontsize=16)
-plt.savefig('Reckoning_ratios_Australia_forecast_' + now.strftime('%Y%m%d') + '.png', dpi=300)
+# plt.savefig('Reckoning_ratios_Australia_forecast_' + now.strftime('%Y%m%d') + '.png', dpi=300)
 plt.show()

@@ -10,6 +10,10 @@ import pandas as pd
 
 # See also:
 # https://medium.com/@megan.higgie/without-serious-action-australia-will-run-out-of-intensive-care-beds-between-7-and-10-april-59f83b52756e
+# https://www.youtube.com/watch?v=FkoP2KJW5gA
+# https://www.doherty.edu.au/uploads/content_doc/McVernon_Modelling_COVID-19_07Apr1_with_appendix.pdf
+# https://www.doherty.edu.au/uploads/content_doc/Geard_importation_risk_assessment_COVID19_Apr7.pdf
+
 
 # Initial population
 P0 = 25000000.0
@@ -43,7 +47,7 @@ def alpha_timedep(_t):
     else:
         # Effects of social distancing should be kicking in. Value here is a total guess, will need some data
         # to tune to in a week or so.
-        return 0.09
+        return 0.03
     # end if
 # end func
 
